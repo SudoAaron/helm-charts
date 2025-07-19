@@ -50,8 +50,7 @@ helm show all oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
 ```
 ├── .github/workflows/          # GitHub Actions workflows
 │   ├── lint-test.yml          # PR validation (lint, test, verify)
-│   ├── version-check.yml      # Auto-tagging on version changes
-│   └── release.yml            # Release to OCI registry
+│   └── version-check.yml      # Combined: Auto-tag, release, and publish
 ├── charts/                    # Helm charts directory
 │   └── demo-app/             # Example application chart
 │       ├── Chart.yaml        # Chart metadata
@@ -61,26 +60,48 @@ helm show all oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
 └── ct.yaml                   # Chart testing configuration
 ```
 
-## 🔄 Workflow Overview
+## 🔄 Release Workflows
 
-### 1. Pull Request to Main
-When you create a PR to the main branch with chart changes:
-- **Linting**: Charts are linted for best practices
-- **Unit Testing**: Helm unit tests are executed  
-- **Integration Testing**: Charts are deployed to a kind cluster
-- **Verification**: All tests must pass before merge
+### 📝 **Primary Flow: Auto-Release on Main Merge**
+1. **Create PR** with chart changes
+2. **CI runs**: Lint, test, verify charts
+3. **Merge to main**: Version detection triggers
+4. **Auto-tag**: Creates `{chart-name}-v{version}` tags
+5. **Auto-release**: Publishes to OCI registry + GitHub Releases
 
-### 2. Merge to Main
-When changes are merged to main:
-- **Version Detection**: Checks if any chart versions have changed
-- **Auto-Tagging**: Creates git tags in format `{chart-name}-v{version}`
-- **Trigger Release**: Automatically triggers the release workflow
+### 🚨 **Emergency Flow: Manual Tag Release**
+```bash
+# Create manual tag for hotfix/re-release
+git tag demo-app-v0.2.1
+git push origin demo-app-v0.2.1
+# Triggers immediate release workflow
+```
 
-### 3. Tag Push (vX.Y.Z)
-When a tag is pushed (or created automatically):
-- **Package Chart**: Creates a Helm chart package
-- **Push to OCI Registry**: Pushes chart to GitHub Container Registry
-- **Create GitHub Release**: Creates release with installation instructions
+### 🎛️ **Manual Flow: Workflow Dispatch**
+- Go to **Actions** → **Version Check, Tag, and Release**
+- Click **Run workflow**
+- Optionally specify chart name for single-chart release
+
+## 🔄 Workflow Details
+
+### 1. Pull Request Validation (`lint-test.yml`)
+**Triggers**: PRs to main with chart changes
+- **Chart linting** with `helm lint` and `ct lint`
+- **Unit testing** with chart-testing
+- **Integration testing** on kind cluster
+- **Verification** of template rendering
+
+### 2. Automated Release (`version-check.yml`)
+**Triggers**: 
+- Push to main (auto-tag + release)
+- Manual tag push (release existing tag)  
+- Workflow dispatch (manual control)
+
+**Actions**:
+- **Version detection**: Scans chart versions vs existing tags
+- **Tag creation**: Auto-creates missing version tags
+- **OCI publishing**: Pushes charts to `ghcr.io`
+- **GitHub Releases**: Creates releases with chart packages
 
 ## 🛠 Setup Instructions
 
@@ -89,11 +110,31 @@ When a tag is pushed (or created automatically):
 1. **Use this template** to create a new repository
 2. **No additional setup required** - GitHub Container Registry is enabled by default
 
-### 2. Initial Chart Release
+### 2. Adding New Charts
 
-1. **Create your first chart** (or modify the demo-app):
+1. **Create your chart** (or modify the demo-app):
    ```bash
    # Create a new chart
+   cd charts/
+   helm create my-app
+   # Edit Chart.yaml, values.yaml, templates, etc.
+   ```
+
+2. **Bump version** in `Chart.yaml`:
+   ```yaml
+   version: 1.0.0  # This will trigger auto-release
+   ```
+
+3. **Submit PR**:
+   ```bash
+   git checkout -b feature/add-my-app
+   git add .
+   git commit -m "feat: add my-app chart v1.0.0"
+   git push origin feature/add-my-app
+   # Create PR in GitHub UI
+   ```
+
+4. **Merge to main** → Automatic release!
    helm create charts/my-app
    
    # Or modify the existing demo-app
