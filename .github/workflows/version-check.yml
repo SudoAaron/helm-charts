@@ -144,6 +144,9 @@ jobs:
         run: |
           mkdir -p ./packages
           
+          # Convert repository owner to lowercase for OCI registry
+          repo_owner_lower=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
           # Handle auto-tag scenario (multiple charts)
           if [[ "${{ steps.create-tags.outputs.has_new_tags }}" == "true" ]]; then
             for chart_dir in charts/*/; do
@@ -166,7 +169,7 @@ jobs:
                 helm package "$chart_dir" --destination ./packages/
                 
                 # Push to OCI registry
-                helm push "./packages/$chart_name-$current_version.tgz" oci://ghcr.io/${{ github.repository_owner }}/helm-charts
+                helm push "./packages/$chart_name-$current_version.tgz" oci://ghcr.io/$repo_owner_lower/helm-charts
                 
                 echo "Successfully released $chart_name:$current_version to OCI registry"
               fi
@@ -186,7 +189,7 @@ jobs:
               helm package "$chart_dir" --destination ./packages/
               
               # Push to OCI registry
-              helm push "./packages/$chart_name-$version.tgz" oci://ghcr.io/${{ github.repository_owner }}/helm-charts
+              helm push "./packages/$chart_name-$version.tgz" oci://ghcr.io/$repo_owner_lower/helm-charts
               
               echo "Successfully released $chart_name:$version to OCI registry"
             else
