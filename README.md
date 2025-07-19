@@ -16,10 +16,10 @@ A modern Helm charts repository using **OCI Registry** (GitHub Container Registr
 ### Install Charts Directly (Recommended)
 ```bash
 # Install the demo-app chart
-helm install my-demo oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
+helm install my-demo oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 
 # Install with custom values
-helm install my-demo oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4 \
+helm install my-demo oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2 \
   --set replicaCount=3 \
   --set service.type=LoadBalancer
 ```
@@ -27,22 +27,22 @@ helm install my-demo oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.
 ### Pull Chart Locally First
 ```bash
 # Pull chart to local directory
-helm pull oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
+helm pull oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 
 # Install from local file
-helm install my-demo demo-app-0.1.4.tgz
+helm install my-demo demo-app-0.2.2.tgz
 ```
 
 ### Browse Available Charts
 ```bash
 # Show chart information
-helm show chart oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
+helm show chart oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 
 # Show default values
-helm show values oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
+helm show values oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 
 # Show all information
-helm show all oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.1.4
+helm show all oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 ```
 
 ## 📁 Repository Structure
