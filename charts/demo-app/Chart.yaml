@@ -4,12 +4,12 @@ description: A simple demo application Helm chart
 type: application
 version: 0.2.1
 appVersion: "1.0.0"
-home: https://github.com/your-org/helm-charts
+home: https://github.com/SudoAaron/helm-charts
 sources:
-  - https://github.com/your-org/helm-charts
+  - https://github.com/SudoAaron/helm-charts
 maintainers:
-  - name: Your Name
-    email: your.email@example.com
+  - name: SudoAaron
+    email: aaronmawilliams@gmail.com
 keywords:
   - demo
   - application
