@@ -1,0 +1,153 @@
+name: Version Check, Tag, and Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  check-version-tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for chart changes
+        id: check-changes
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -q "^charts/"; then
+            echo "charts-changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "charts-changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check version changes and create tags
+        if: steps.check-changes.outputs.charts-changed == 'true'
+        id: create-tags
+        run: |
+          new_tags=""
+          for chart_dir in charts/*/; do
+            if [ ! -d "$chart_dir" ]; then continue; fi
+            
+            chart_name=$(basename "$chart_dir")
+            chart_file="$chart_dir/Chart.yaml"
+            
+            if [ ! -f "$chart_file" ]; then continue; fi
+            
+            # Get current version
+            current_version=$(grep '^version:' "$chart_file" | awk '{print $2}' | tr -d '"'"'"'"')
+            
+            # Check if tag exists
+            tag_name="$chart_name-v$current_version"
+            if ! git tag -l | grep -q "^$tag_name$"; then
+              echo "Creating new tag: $tag_name"
+              git tag "$tag_name"
+              new_tags="$new_tags$tag_name "
+            fi
+          done
+          
+          if [ -n "$new_tags" ]; then
+            echo "Pushing tags: $new_tags"
+            git push origin --tags
+            echo "new_tags=$new_tags" >> "$GITHUB_OUTPUT"
+            echo "has_new_tags=true" >> "$GITHUB_OUTPUT"
+            echo "Tags pushed successfully."
+          else
+            echo "No new tags to create."
+            echo "has_new_tags=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Helm
+        if: steps.create-tags.outputs.has_new_tags == 'true'
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Login to GitHub Container Registry
+        if: steps.create-tags.outputs.has_new_tags == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release charts to OCI registry
+        if: steps.create-tags.outputs.has_new_tags == 'true'
+        run: |
+          mkdir -p ./packages
+          
+          # Convert repository owner to lowercase for OCI registry
+          repo_owner_lower=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
+          for chart_dir in charts/*/; do
+            if [ ! -d "$chart_dir" ]; then continue; fi
+            
+            chart_name=$(basename "$chart_dir")
+            chart_file="$chart_dir/Chart.yaml"
+            
+            if [ ! -f "$chart_file" ]; then continue; fi
+            
+            # Get current version
+            current_version=$(grep '^version:' "$chart_file" | awk '{print $2}' | tr -d '"'"'"'"')
+            tag_name="$chart_name-v$current_version"
+            
+            # Only release if this tag was just created
+            if echo "${{ steps.create-tags.outputs.new_tags || '' }}" | grep -q "$tag_name"; then
+              echo "Releasing chart: $chart_name version $current_version"
+              
+              # Package the chart
+              helm package "$chart_dir" --destination ./packages/
+              
+              # Push to OCI registry
+              helm push "./packages/$chart_name-$current_version.tgz" oci://ghcr.io/$repo_owner_lower/helm-charts
+              
+              echo "Successfully released $chart_name:$current_version to OCI registry"
+            fi
+          done
+
+      - name: Create GitHub Releases
+        if: steps.create-tags.outputs.has_new_tags == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for chart_dir in charts/*/; do
+            if [ ! -d "$chart_dir" ]; then continue; fi
+            
+            chart_name=$(basename "$chart_dir")
+            chart_file="$chart_dir/Chart.yaml"
+            
+            if [ ! -f "$chart_file" ]; then continue; fi
+            
+            # Get current version and description
+            current_version=$(grep '^version:' "$chart_file" | awk '{print $2}' | tr -d '"'"'"'"')
+            description=$(grep '^description:' "$chart_file" | sed 's/^description: *//' | tr -d '"'"'"'"')
+            tag_name="$chart_name-v$current_version"
+            
+            # Only create release if this tag was just created
+            if echo "${{ steps.create-tags.outputs.new_tags || '' }}" | grep -q "$tag_name"; then
+              echo "Creating GitHub Release for: $chart_name version $current_version"
+              
+              # Package the chart if not already done
+              if [ ! -f "./packages/$chart_name-$current_version.tgz" ]; then
+                helm package "$chart_dir" --destination ./packages/
+              fi
+              
+              # Create simple release notes
+              release_notes="Chart: $chart_name v$current_version - $description"
+              
+              # Create the release
+              gh release create "$tag_name" \
+                "./packages/$chart_name-$current_version.tgz" \
+                --title "$chart_name v$current_version" \
+                --notes "$release_notes"
+              
+              echo "Successfully created GitHub Release for $chart_name:$current_version"
+            fi
+          done
