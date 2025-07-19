@@ -80,6 +80,39 @@ jobs:
           echo "Packaged charts:"
           ls -la .cr-release-packages/
 
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chart_name="${{ steps.chart-info.outputs.chart-name }}"
+          version="${{ steps.chart-info.outputs.version }}"
+          tag="${{ steps.tag.outputs.tag }}"
+          
+          # Create release notes
+          cat > release_notes.md << EOF
+          ## ${chart_name} v${version}
+          
+          ### Installation
+          \`\`\`bash
+          helm repo add sudoaaron-charts https://sudoaaron.github.io/helm-charts/
+          helm repo update
+          helm install my-release sudoaaron-charts/${chart_name} --version ${version}
+          \`\`\`
+          
+          ### What's Changed
+          - Released ${chart_name} chart version ${version}
+          
+          ### Files
+          - Chart package: [${chart_name}-${version}.tgz](https://sudoaaron.github.io/helm-charts/${chart_name}-${version}.tgz)
+          - Repository index: [index.yaml](https://sudoaaron.github.io/helm-charts/index.yaml)
+          EOF
+          
+          # Create GitHub release with the chart package
+          gh release create "$tag" \
+            --title "${chart_name} v${version}" \
+            --notes-file release_notes.md \
+            .cr-release-packages/${chart_name}-${version}.tgz
+
       - name: Checkout gh-pages
         uses: actions/checkout@v4
         with:
