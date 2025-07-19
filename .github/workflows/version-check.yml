@@ -12,9 +12,6 @@ permissions:
 jobs:
   check-version-and-tag:
     runs-on: ubuntu-latest
-    outputs:
-      charts-changed: ${{ steps.check-changes.outputs.charts-changed }}
-      new-tags: ${{ steps.check-version.outputs.new-tags }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +28,6 @@ jobs:
           fi
 
       - name: Check version changes and create tags
-        id: check-version
         if: steps.check-changes.outputs.charts-changed == 'true'
         run: |
           new_tags=""
@@ -56,34 +52,9 @@ jobs:
           done
           
           if [ -n "$new_tags" ]; then
+            echo "Pushing tags: $new_tags"
             git push origin --tags
-            echo "new-tags=$new_tags" >> "$GITHUB_OUTPUT"
+            echo "Tags pushed successfully. The release workflow will be triggered automatically."
           else
-            echo "new-tags=" >> "$GITHUB_OUTPUT"
+            echo "No new tags to create."
           fi
-
-  trigger-release:
-    needs: check-version-and-tag
-    if: needs.check-version-and-tag.outputs.new-tags != ''
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        tag: ${{ fromJson(format('["{0}"]', needs.check-version-and-tag.outputs.new-tags)) }}
-    steps:
-      - name: Trigger release workflow
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const tags = '${{ needs.check-version-and-tag.outputs.new-tags }}'.trim().split(' ').filter(tag => tag);
-            
-            for (const tag of tags) {
-              await github.rest.actions.createWorkflowDispatch({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                workflow_id: 'release.yml',
-                ref: 'main',
-                inputs: {
-                  tag: tag
-                }
-              });
-            }
