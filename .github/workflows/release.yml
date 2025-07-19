@@ -1,0 +1,112 @@
+name: Release Chart
+
+on:
+  push:
+    tags:
+      - '*-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., demo-app-v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Parse chart info from tag
+        id: chart-info
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          # Extract chart name and version from tag (format: chart-name-vX.Y.Z)
+          chart_name=$(echo "$tag" | sed 's/-v[0-9].*//')
+          version=$(echo "$tag" | sed 's/.*-v//')
+          
+          echo "chart-name=$chart_name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Package chart
+        run: |
+          chart_name="${{ steps.chart-info.outputs.chart-name }}"
+          version="${{ steps.chart-info.outputs.version }}"
+          
+          # Verify the chart exists and version matches
+          if [ ! -d "charts/$chart_name" ]; then
+            echo "Chart directory charts/$chart_name not found"
+            exit 1
+          fi
+          
+          chart_version=$(grep '^version:' "charts/$chart_name/Chart.yaml" | awk '{print $2}' | tr -d '"'"'"'"')
+          if [ "$chart_version" != "$version" ]; then
+            echo "Version mismatch: tag version $version != chart version $chart_version"
+            exit 1
+          fi
+          
+          mkdir -p .cr-release-packages
+          helm package "charts/$chart_name" -d .cr-release-packages
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Helm repository
+        run: |
+          # Copy new packages
+          cp .cr-release-packages/*.tgz gh-pages/ 2>/dev/null || true
+          
+          # Update index
+          cd gh-pages
+          helm repo index . --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+          
+          # Commit and push
+          git add .
+          git commit -m "Release ${{ steps.tag.outputs.tag }}" || exit 0
+          git push
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./gh-pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

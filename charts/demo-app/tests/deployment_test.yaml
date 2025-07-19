@@ -1,0 +1,30 @@
+suite: test deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: should render deployment
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-demo-app
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "nginx:1.21"
+
+  - it: should render deployment with custom values
+    set:
+      replicaCount: 3
+      image.repository: "custom/app"
+      image.tag: "2.0"
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "custom/app:2.0"

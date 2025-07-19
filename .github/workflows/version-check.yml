@@ -1,0 +1,89 @@
+name: Version Check and Auto Tag
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+
+permissions:
+  contents: write
+
+jobs:
+  check-version-and-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      charts-changed: ${{ steps.check-changes.outputs.charts-changed }}
+      new-tags: ${{ steps.check-version.outputs.new-tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for chart changes
+        id: check-changes
+        run: |
+          if git diff --name-only HEAD^ HEAD | grep -q "^charts/"; then
+            echo "charts-changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "charts-changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check version changes and create tags
+        id: check-version
+        if: steps.check-changes.outputs.charts-changed == 'true'
+        run: |
+          new_tags=""
+          for chart_dir in charts/*/; do
+            if [ ! -d "$chart_dir" ]; then continue; fi
+            
+            chart_name=$(basename "$chart_dir")
+            chart_file="$chart_dir/Chart.yaml"
+            
+            if [ ! -f "$chart_file" ]; then continue; fi
+            
+            # Get current version
+            current_version=$(grep '^version:' "$chart_file" | awk '{print $2}' | tr -d '"'"'"'"')
+            
+            # Check if tag exists
+            tag_name="$chart_name-v$current_version"
+            if ! git tag -l | grep -q "^$tag_name$"; then
+              echo "Creating new tag: $tag_name"
+              git tag "$tag_name"
+              new_tags="$new_tags$tag_name "
+            fi
+          done
+          
+          if [ -n "$new_tags" ]; then
+            git push origin --tags
+            echo "new-tags=$new_tags" >> "$GITHUB_OUTPUT"
+          else
+            echo "new-tags=" >> "$GITHUB_OUTPUT"
+          fi
+
+  trigger-release:
+    needs: check-version-and-tag
+    if: needs.check-version-and-tag.outputs.new-tags != ''
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tag: ${{ fromJson(format('["{0}"]', needs.check-version-and-tag.outputs.new-tags)) }}
+    steps:
+      - name: Trigger release workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tags = '${{ needs.check-version-and-tag.outputs.new-tags }}'.trim().split(' ').filter(tag => tag);
+            
+            for (const tag of tags) {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'release.yml',
+                ref: 'main',
+                inputs: {
+                  tag: tag
+                }
+              });
+            }
