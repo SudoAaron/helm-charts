@@ -60,27 +60,20 @@ helm show all oci://ghcr.io/sudoaaron/helm-charts/demo-app --version 0.2.2
 └── ct.yaml                   # Chart testing configuration
 ```
 
-## 🔄 Release Workflows
+## 🔄 Release Workflow
 
-### 📝 **Primary Flow: Auto-Release on Main Merge**
+### 📝 **PR-Based Release Flow**
 1. **Create PR** with chart changes
-2. **CI runs**: Lint, test, verify charts
-3. **Merge to main**: Version detection triggers
+2. **CI validates**: Lint, test, verify charts
+3. **Merge to main**: Version detection triggers automatically
 4. **Auto-tag**: Creates `{chart-name}-v{version}` tags
 5. **Auto-release**: Publishes to OCI registry + GitHub Releases
 
-### 🚨 **Emergency Flow: Manual Tag Release**
-```bash
-# Create manual tag for hotfix/re-release
-git tag demo-app-v0.2.1
-git push origin demo-app-v0.2.1
-# Triggers immediate release workflow
-```
-
-### 🎛️ **Manual Flow: Workflow Dispatch**
-- Go to **Actions** → **Version Check, Tag, and Release**
-- Click **Run workflow**
-- Optionally specify chart name for single-chart release
+### ✅ **Simple & Consistent**
+- **One workflow**: All releases through PR merges
+- **Audit trail**: Every release traceable to a PR
+- **No manual steps**: Version bump in Chart.yaml → automatic release
+- **Multi-chart support**: Independent versioning and releases
 
 ## 🔄 Workflow Details
 
@@ -91,11 +84,8 @@ git push origin demo-app-v0.2.1
 - **Integration testing** on kind cluster
 - **Verification** of template rendering
 
-### 2. Automated Release (`version-check.yml`)
-**Triggers**: 
-- Push to main (auto-tag + release)
-- Manual tag push (release existing tag)  
-- Workflow dispatch (manual control)
+### 1. Automated Release (`version-check.yml`)
+**Triggers**: Push to main with chart changes
 
 **Actions**:
 - **Version detection**: Scans chart versions vs existing tags
