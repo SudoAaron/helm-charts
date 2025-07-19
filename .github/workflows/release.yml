@@ -74,8 +74,11 @@ jobs:
           # Package the chart
           helm package "charts/$chart_name"
           
+          # Convert repository owner to lowercase for GitHub Container Registry
+          repo_owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
           # Push to OCI registry
-          helm push "${chart_name}-${version}.tgz" oci://ghcr.io/${{ github.repository_owner }}/helm-charts
+          helm push "${chart_name}-${version}.tgz" "oci://ghcr.io/${repo_owner}/helm-charts"
           
           echo "Successfully pushed $chart_name:$version to OCI registry"
 
@@ -87,6 +90,9 @@ jobs:
           version="${{ steps.chart-info.outputs.version }}"
           tag="${{ steps.tag.outputs.tag }}"
           
+          # Convert repository owner to lowercase for GitHub Container Registry
+          repo_owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
           # Create release notes
           cat > release_notes.md << EOF
           ## ${chart_name} v${version}
@@ -94,24 +100,24 @@ jobs:
           ### 🚀 Installation (OCI Registry)
           \`\`\`bash
           # Install directly from OCI registry
-          helm install my-release oci://ghcr.io/${{ github.repository_owner }}/helm-charts/${chart_name} --version ${version}
+          helm install my-release oci://ghcr.io/${repo_owner}/helm-charts/${chart_name} --version ${version}
           \`\`\`
           
           ### 📦 Alternative Installation Methods
           \`\`\`bash
           # Pull chart locally first
-          helm pull oci://ghcr.io/${{ github.repository_owner }}/helm-charts/${chart_name} --version ${version}
+          helm pull oci://ghcr.io/${repo_owner}/helm-charts/${chart_name} --version ${version}
           helm install my-release ${chart_name}-${version}.tgz
           
           # Show chart information
-          helm show chart oci://ghcr.io/${{ github.repository_owner }}/helm-charts/${chart_name} --version ${version}
+          helm show chart oci://ghcr.io/${repo_owner}/helm-charts/${chart_name} --version ${version}
           \`\`\`
           
           ### 🔍 Registry Information
-          - **Registry**: \`ghcr.io/${{ github.repository_owner }}/helm-charts\`
+          - **Registry**: \`ghcr.io/${repo_owner}/helm-charts\`
           - **Chart**: \`${chart_name}\`
           - **Version**: \`${version}\`
-          - **Full Reference**: \`oci://ghcr.io/${{ github.repository_owner }}/helm-charts/${chart_name}:${version}\`
+          - **Full Reference**: \`oci://ghcr.io/${repo_owner}/helm-charts/${chart_name}:${version}\`
           
           ### What's Changed
           - Released ${chart_name} chart version ${version} to OCI registry
